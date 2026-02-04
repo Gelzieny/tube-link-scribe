@@ -1,17 +1,18 @@
 import { motion } from 'framer-motion';
-import { FileText, Search } from 'lucide-react';
+import { FileText, Search, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { TranscriptionCard } from '@/components/TranscriptionCard';
-import { mockTranscriptions } from '@/data/mockData';
+import { useTranscriptions } from '@/hooks/useTranscriptions';
 import { Input } from '@/components/ui/input';
 
 const Transcriptions = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const { data: transcriptions = [], isLoading } = useTranscriptions();
 
-  const filteredTranscriptions = mockTranscriptions.filter((t) =>
-    t.videoTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.channelName.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredTranscriptions = transcriptions.filter((t) =>
+    (t.video_title?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+    (t.video_url?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -27,7 +28,7 @@ const Transcriptions = () => {
             Minhas Transcrições
           </h1>
           <p className="text-muted-foreground mt-1">
-            {mockTranscriptions.length} transcrições no total
+            {transcriptions.length} transcrições no total
           </p>
         </motion.div>
 
@@ -42,7 +43,7 @@ const Transcriptions = () => {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Buscar por título ou canal..."
+              placeholder="Buscar por título ou URL..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-12 py-6 bg-card border-border text-foreground placeholder:text-muted-foreground"
@@ -56,7 +57,12 @@ const Transcriptions = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          {filteredTranscriptions.length > 0 ? (
+          {isLoading ? (
+            <div className="glass-card p-12 text-center">
+              <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+              <p className="text-muted-foreground">Carregando transcrições...</p>
+            </div>
+          ) : filteredTranscriptions.length > 0 ? (
             <div className="grid gap-4">
               {filteredTranscriptions.map((transcription, index) => (
                 <motion.div

@@ -6,13 +6,27 @@ import { Layout } from '@/components/layout/Layout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { getVideoIdFromUrl } from '@/data/mockData';
+import { useCreateTranscription } from '@/hooks/useTranscriptions';
+
+const getVideoIdFromUrl = (url: string): string | null => {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+    /youtube\.com\/shorts\/([^&\n?#]+)/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  
+  return null;
+};
 
 const NewTranscription = () => {
   const navigate = useNavigate();
   const [url, setUrl] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const createTranscription = useCreateTranscription();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,18 +38,18 @@ const NewTranscription = () => {
       return;
     }
 
-    setIsLoading(true);
+    try {
+      const result = await createTranscription.mutateAsync(url);
+      toast.success('Transcrição iniciada com sucesso!', {
+        description: 'Você será redirecionado em instantes...',
+      });
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    toast.success('Transcrição iniciada com sucesso!', {
-      description: 'Você será redirecionado em instantes...',
-    });
-
-    setTimeout(() => {
-      navigate('/transcription/1');
-    }, 1000);
+      setTimeout(() => {
+        navigate(`/transcription/${result.id}`);
+      }, 1000);
+    } catch (err) {
+      // Error is handled by the mutation
+    }
   };
 
   const isValidUrl = url && getVideoIdFromUrl(url);
@@ -82,7 +96,7 @@ const NewTranscription = () => {
                     setError('');
                   }}
                   className="pl-12 py-6 bg-card border-border text-foreground placeholder:text-muted-foreground text-lg"
-                  disabled={isLoading}
+                  disabled={createTranscription.isPending}
                 />
               </div>
               {error && (
@@ -123,10 +137,10 @@ const NewTranscription = () => {
 
             <Button
               type="submit"
-              disabled={!url || isLoading}
+              disabled={!url || createTranscription.isPending}
               className="w-full py-6 text-lg font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              {isLoading ? (
+              {createTranscription.isPending ? (
                 <>
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                   Processando...

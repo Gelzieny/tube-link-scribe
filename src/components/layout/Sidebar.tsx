@@ -1,7 +1,7 @@
 import { NavLink as RouterNavLink, useLocation } from 'react-router-dom';
 import { Home, FileText, User, Plus, Youtube } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { mockUser } from '@/data/mockData';
+import { useProfile } from '@/hooks/useProfile';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Dashboard' },
@@ -10,6 +10,7 @@ const navItems = [
 
 export function Sidebar() {
   const location = useLocation();
+  const { data: profile } = useProfile();
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
@@ -64,17 +65,15 @@ export function Sidebar() {
             location.pathname === '/profile' && 'bg-sidebar-accent'
           )}
         >
-          <img
-            src={mockUser.avatar}
-            alt={mockUser.name}
-            className="w-10 h-10 rounded-full object-cover border-2 border-primary/20"
-          />
+          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+            <User className="w-5 h-5 text-primary" />
+          </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate">
-              {mockUser.name}
+              {profile?.name || 'Usuário'}
             </p>
             <p className="text-xs text-muted-foreground truncate">
-              {mockUser.email}
+              {profile?.email || ''}
             </p>
           </div>
           <User className="w-4 h-4 text-muted-foreground" />
