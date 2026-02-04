@@ -13,7 +13,9 @@ Projeto criado utilizando **Lovable** para acelerar o desenvolvimento da interfa
 ## 📸 Preview do Projeto
 
 <p align="center">
-  <img src="https://github.com/Gelzieny/calculadora-html/blob/main/.github/img/calculadora.png?raw=true" alt="Preview do projeto"/>
+  <img src=".github/imgs/dashboard.png" alt="Preview do projeto" />
+  <img src=".github/imgs/nova_transcricao.png" alt="Tela nova transcrição" />
+  <img src=".github/imgs/image.png" alt="Transcrição" />
 </p>
 
 ## 🚀 Funcionalidades
