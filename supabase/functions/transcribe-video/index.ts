@@ -82,29 +82,21 @@ serve(async (req) => {
     console.log(`Processing video with Gemini...`);
 
     // Use Gemini to transcribe the video directly from YouTube URL
-    let transcriptionText: string;
-    
-    try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-preview-05-20',
-        contents: [
-          {
-            parts: [
-              {
-                fileData: {
-                  fileUri: videoUrl,
-                  mimeType: 'video/*'
-                }
-              },
-              {
-                text: 'Transcreva o vídeo completo. Forneça apenas o texto transcrito, sem comentários adicionais.'
-              }
-            ]
-          }
-        ]
-      });
+    // NOTE: Model names change over time; avoid hard-coding preview-only names.
+    const MODEL_CANDIDATES = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-flash-latest',
+    ];
 
-      transcriptionText = response.text || 'Transcrição não disponível';
+    let transcriptionText: string;
+
+    try {
+      transcriptionText = await generateTranscriptionWithFallback({
+        ai,
+        videoUrl,
+        modelCandidates: MODEL_CANDIDATES,
+      });
       console.log('Transcription completed successfully');
     } catch (geminiError) {
       console.error('Gemini API error:', geminiError);
@@ -165,6 +157,68 @@ serve(async (req) => {
     });
   }
 });
+
+async function generateTranscriptionWithFallback(params: {
+  ai: GoogleGenAI;
+  videoUrl: string;
+  modelCandidates: string[];
+}): Promise<string> {
+  const { ai, videoUrl, modelCandidates } = params;
+
+  let lastError: unknown = null;
+
+  for (const model of modelCandidates) {
+    console.log(`Trying Gemini model: ${model}`);
+
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: [
+          {
+            parts: [
+              {
+                fileData: {
+                  fileUri: videoUrl,
+                  mimeType: 'video/*',
+                },
+              },
+              {
+                text:
+                  'Transcreva o vídeo completo. Forneça apenas o texto transcrito, sem comentários adicionais.',
+              },
+            ],
+          },
+        ],
+      });
+
+      const text = response.text?.trim();
+      if (text) return text;
+      return 'Transcrição não disponível';
+    } catch (err) {
+      lastError = err;
+      const msg = err instanceof Error ? err.message : String(err);
+
+      // If the model doesn't exist / isn't supported, try the next one.
+      if (
+        msg.includes('404') ||
+        msg.includes('NOT_FOUND') ||
+        msg.includes('is not found') ||
+        msg.includes('not supported for generateContent')
+      ) {
+        console.log(`Model not available (${model}). Trying next...`);
+        continue;
+      }
+
+      // Any other error (auth/quota/input) should bubble up.
+      throw err;
+    }
+  }
+
+  const lastMsg = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(
+    `Nenhum modelo Gemini suportado disponível. Último erro: ${lastMsg}`
+  );
+}
 
 function extractVideoId(url: string): string {
   if (!url) return '';
