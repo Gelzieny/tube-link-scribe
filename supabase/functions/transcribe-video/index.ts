@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { GoogleGenAI } from "https://esm.sh/@google/genai@0.14.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -49,40 +50,64 @@ serve(async (req) => {
 
     console.log(`Processing transcription ${transcriptionId} for video: ${videoUrl}`);
 
-    // Extract video title from URL (basic extraction)
+    // Extract video ID from URL
     const videoId = extractVideoId(videoUrl);
-    const videoTitle = `Vídeo YouTube: ${videoId}`;
-
-    // Call Lovable AI Gateway for transcription
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
+    if (!videoId) {
+      throw new Error('Invalid YouTube URL');
     }
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages: [
-          {
-            role: 'system',
-            content: 'Você é um assistente especializado em transcrever vídeos do YouTube. Quando receber uma URL de vídeo, analise o conteúdo e forneça uma transcrição detalhada em português. Se não conseguir acessar o vídeo diretamente, explique isso e ofereça orientações sobre como obter a transcrição.'
-          },
-          {
-            role: 'user',
-            content: `Por favor, transcreva o seguinte vídeo do YouTube: ${videoUrl}\n\nForneça a transcrição completa do áudio do vídeo em português.`
-          }
-        ],
-      }),
-    });
+    // Initialize Google Gemini
+    const GOOGLE_API_KEY = Deno.env.get('GOOGLE_API_KEY');
+    if (!GOOGLE_API_KEY) {
+      throw new Error('GOOGLE_API_KEY not configured');
+    }
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('AI Gateway error:', aiResponse.status, errorText);
+    const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
+
+    // Fetch video title from YouTube oEmbed API
+    let videoTitle = `Vídeo YouTube: ${videoId}`;
+    try {
+      const oembedResponse = await fetch(
+        `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`
+      );
+      if (oembedResponse.ok) {
+        const oembedData = await oembedResponse.json();
+        videoTitle = oembedData.title || videoTitle;
+      }
+    } catch (e) {
+      console.log('Could not fetch video title:', e);
+    }
+
+    console.log(`Video title: ${videoTitle}`);
+    console.log(`Processing video with Gemini...`);
+
+    // Use Gemini to transcribe the video directly from YouTube URL
+    let transcriptionText: string;
+    
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-preview-05-20',
+        contents: [
+          {
+            parts: [
+              {
+                fileData: {
+                  fileUri: videoUrl,
+                  mimeType: 'video/*'
+                }
+              },
+              {
+                text: 'Transcreva o vídeo completo. Forneça apenas o texto transcrito, sem comentários adicionais.'
+              }
+            ]
+          }
+        ]
+      });
+
+      transcriptionText = response.text || 'Transcrição não disponível';
+      console.log('Transcription completed successfully');
+    } catch (geminiError) {
+      console.error('Gemini API error:', geminiError);
       
       // Update status to failed
       const adminClient = createClient(
@@ -94,18 +119,15 @@ serve(async (req) => {
         .from('transcriptions')
         .update({ 
           status: 'failed',
-          transcription_text: 'Erro ao processar transcrição. Tente novamente mais tarde.'
+          transcription_text: `Erro ao processar transcrição: ${geminiError instanceof Error ? geminiError.message : 'Erro desconhecido'}`
         })
         .eq('id', transcriptionId);
 
-      return new Response(JSON.stringify({ error: 'AI processing failed' }), {
+      return new Response(JSON.stringify({ error: 'Gemini processing failed', details: geminiError instanceof Error ? geminiError.message : 'Unknown error' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-
-    const aiData = await aiResponse.json();
-    const transcriptionText = aiData.choices?.[0]?.message?.content || 'Transcrição não disponível';
 
     console.log('Transcription completed, updating database...');
 
@@ -134,7 +156,6 @@ serve(async (req) => {
     return new Response(JSON.stringify({ success: true, transcriptionId }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
-
   } catch (error) {
     console.error('Error processing transcription:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -146,6 +167,8 @@ serve(async (req) => {
 });
 
 function extractVideoId(url: string): string {
+  if (!url) return '';
+  
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
     /youtube\.com\/shorts\/([^&\n?#]+)/
@@ -156,5 +179,5 @@ function extractVideoId(url: string): string {
     if (match) return match[1];
   }
   
-  return 'unknown';
+  return '';
 }
