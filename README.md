@@ -7,7 +7,7 @@ Projeto criado utilizando **Lovable** para acelerar o desenvolvimento da interfa
 ## 🌐 Acesso à Aplicação
 
 👉 **Produção:**  
-[https://tube-link-scribe.lovable.app](https://tube-link-scribe.lovable.app)
+[https://tube-link-scribe.vercel.app/auth](https://tube-link-scribe.vercel.app/auth)
 
 
 ## 📸 Preview do Projeto
